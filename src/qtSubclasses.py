@@ -1,9 +1,10 @@
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout, QButtonGroup, QCheckBox
 from PyQt6.QtCore import QAbstractTableModel, Qt
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class CustomDialog(QDialog):
@@ -57,9 +58,41 @@ class SubmissionTableModel(QAbstractTableModel):
             if orientation == Qt.Orientation.Vertical:
                 return str(self._data.index[section])
             
+class NullTableModel(QAbstractTableModel):
+    def __init__(self):
+        super().__init__()
+        #self._data = pd.DataFrame()
+    
+    def data(self, index, role):
+        cell_value = self._data.iloc(index.row(), index.column())
+        #if role == Qt.ItemDataRole.DisplayRole:
+        return None
+    def rowCount(self, index):
+        #return None
+        return 0
+    def columnCount(self, index):
+        #return None
+        return 0
+        
 
 class PieCanvas(FigureCanvasQTAgg):
     def __init__(self, pieslices, pielabels, parent=None):
         fig, ax = plt.subplot()
         ax.pie(pieslices, labels=pielabels, labeldistance=1.15)
         super().__init__(fig)
+        
+        
+class LoadSheets(QButtonGroup):
+    def __init__(self):
+        super().__init__()
+        
+    def addCheckBoxes(self, boxlist):
+        sheetgroup = QButtonGroup()
+        for box in boxlist:
+            sheetgroup.addButton(QCheckBox(box))
+        return sheetgroup
+    
+    def removeCheckBoxes(self, boxlist, sheetgroup:QButtonGroup):
+        for box in boxlist:
+            sheetgroup.removeButton(QCheckBox(box))
+        return sheetgroup

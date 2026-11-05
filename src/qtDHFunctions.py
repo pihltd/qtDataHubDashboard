@@ -5,6 +5,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from datetime import datetime, timezone
 from pytz import timezone as tz
+import bento_mdf
+import numpy as np
+import pandas as pd
 
 def dhAPICreds(tier):
     """A simple way to retrieve the Data Hub submission URLs and API tokens
@@ -94,3 +97,44 @@ def elapsedTime(submission_df):
         days.append(diff)
     submission_df.insert(8,'inactiveDays',days,True)
     return submission_df
+
+
+def modelFilesByTag(modelName, modelVersion, mdfonly = False):
+    # The idea is to be able to pull model files from Github with the release tag
+    #Make sure model name is lower case
+    modelName = modelName.lower()
+    #Model versions are frequently preceded by a v character. Dump it.  Except for ICDC
+    if modelName != 'icdc':
+        modelVersion = modelVersion.replace("v","")
+    urls = {
+        'ctdc':[f"https://raw.githubusercontent.com/CBIIT/{modelName}-model/refs/tags/{modelVersion}/model-desc/{modelName}_model_file.yaml", f"https://raw.githubusercontent.com/CBIIT/{modelName}-model/refs/tags/{modelVersion}/model-desc/{modelName}_model_properties_file.yaml"],
+        'cds': [f"https://raw.githubusercontent.com/CBIIT/{modelName}-model/refs/tags/{modelVersion}-GC_Release/model-desc/{modelName}-model.yml", f"https://raw.githubusercontent.com/CBIIT/{modelName}-model/refs/tags/{modelVersion}-GC_Release/model-desc/{modelName}-model-props.yml"],
+        'icdc': [f"https://raw.githubusercontent.com/CBIIT/{modelName}-model-tool/refs/tags/{modelVersion}/model-desc/{modelName}-model.yml", f"https://raw.githubusercontent.com/CBIIT/{modelName}-model-tool/refs/tags/{modelVersion}/model-desc/{modelName}-model-props.yml"]
+    }
+    
+    for entry in urls[modelName]:
+        print(entry)
+    mdf = bento_mdf.MDF(*urls[modelName])
+    mdf = mdf.model
+    if mdfonly:
+        return mdf
+    else:
+        return list(mdf.nodes.keys())
+
+   
+
+def loadSheetOMizer(df, nodename, mdf):
+    #mdf = modelFilesByTag(modelName=modelhandle, modelVersion=modelversion, mdfonly=True)
+    proplist = list(mdf.nodes[nodename].props.keys())
+    dfproplist = df.columns.tolist()
+    
+    for prop in proplist:
+        if prop not in dfproplist:
+            df[prop.lower()] = np.nan
+    # Add in type
+    df.insert(loc=0, column='type', value=nodename.lower())
+    
+    return df
+    #print(f"Model props\n{proplist}\nDF Props:\n{dfproplist}")
+    
+    #print(f"Handle: {mdf.handle}\tVersion: {mdf.version}")

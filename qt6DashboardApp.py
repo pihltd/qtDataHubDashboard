@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication,  QMainWindow, QTabWidget, QVBoxLayout, QComboBox, QHBoxLayout, QWidget, QTableView, QLabel, QHeaderView, QPushButton
+from PyQt6.QtWidgets import QApplication,  QMainWindow, QTabWidget, QVBoxLayout, QComboBox, QHBoxLayout, QWidget, QTableView, QLabel, QHeaderView, QPushButton, QGridLayout, QCheckBox, QButtonGroup, QFileDialog
 from PyQt6.QtCore import QSize
 #from PyQt6.QtGui import QColor
 
@@ -9,8 +9,8 @@ import pyqtgraph as pg
 import pandas as pd
 import numpy as np
 
-from src.qtDHFunctions import dhAPICreds
-from src.qtSubclasses import CustomDialog, SubmissionTableModel
+from src.qtDHFunctions import dhAPICreds, modelFilesByTag, loadSheetOMizer
+from src.qtSubclasses import CustomDialog, SubmissionTableModel, NullTableModel, LoadSheets
 from src.qtData import SubmissionData
 
 #from layout_color_widget import Color
@@ -18,7 +18,6 @@ from src.qtData import SubmissionData
 class MainWindow(QMainWindow):
     
     #TODO: Need reset methods when different drop-downs are changed so that things get cleared.
-    # When Submission changes, re-do summary table
     # When Project changes, clera and reload Submission table and any submission related data
     # When tier changes, reset everything
     #TODO Spinners
@@ -44,15 +43,20 @@ class MainWindow(QMainWindow):
         #
         #  Layouts
         #
-        summarylayout = QVBoxLayout()
+        #summarylayout = QVBoxLayout()
+        summarylayout = QGridLayout()
         dropdownlayout = QHBoxLayout()
-        barlayout = QHBoxLayout()
-        self.pielayout = QHBoxLayout()
+        #self.barlayout = QHBoxLayout()
+        self.barlayout = QGridLayout()
+        self.pielayout = QGridLayout()
         errorlayout = QVBoxLayout()
         warninglayout = QVBoxLayout()
         errorwarninglayout = QHBoxLayout()
-        #self.pielayout2 = QHBoxLayout()
-        
+        #self.loadsheetlayout = QVBoxLayout()
+        self.loadsheetlayout = QGridLayout()
+        self.checkboxlayout = QVBoxLayout()
+        self.checkboxgroup = QButtonGroup()
+        self.checkboxgroup.setExclusive(False)
         #
         # Combo boxes
         #
@@ -82,9 +86,9 @@ class MainWindow(QMainWindow):
         #
         # Reset button
         #
-        self.resetbutton = QPushButton()
-        self.resetbutton.setText("Reset")
-        self.resetbutton.clicked.connect(self.resetApp)
+        #self.resetbutton = QPushButton()
+        #self.resetbutton.setText("Reset")
+        #self.resetbutton.clicked.connect(self.resetApp)
         
         
         #
@@ -102,10 +106,10 @@ class MainWindow(QMainWindow):
         self.node_percentage_widget = pg.PlotWidget()
         self.node_percentage_widget.setBackground(background=None)
         
-        barlayout.addWidget(self.node_raw_widget)
-        barlayout.addWidget(self.node_percentage_widget)
+        self.barlayout.addWidget(self.node_raw_widget, 0,0)
+        self.barlayout.addWidget(self.node_percentage_widget, 0,1)
         barwidget = QWidget()
-        barwidget.setLayout(barlayout)
+        barwidget.setLayout(self.barlayout)
         
         #
         #  Error and warning tables
@@ -208,9 +212,21 @@ class MainWindow(QMainWindow):
         #
         # Pie Charts
         #
+        self.errorpielayout = QHBoxLayout()
+        self.warningpielayout = QHBoxLayout()
+        self.errorpiewidget = QWidget()
+        self.warningpiewidget = QWidget()
+        self.errorpiewidget.setLayout(self.errorpielayout)
+        self.warningpiewidget.setLayout(self.warningpielayout)
         self.errorpiefig = Figure()
         self.warningpiefig = Figure()
         self.rawbar = Figure()
+        self.errorpielabel = QLabel("Submission Errors Pie Chart")
+        self.warningpielabel = QLabel("Submission Warnings Pie Chart")
+        self.pielayout.addWidget(self.errorpielabel, 0,0)
+        self.pielayout.addWidget(self.errorpiewidget, 1,0)
+        self.pielayout.addWidget(self.warningpielabel, 0,1)
+        self.pielayout.addWidget(self.warningpiewidget, 1,1)
         
         #piewidget2 = QWidget()
         #piewidget2.setLayout(self.pielayout2)
@@ -219,15 +235,39 @@ class MainWindow(QMainWindow):
         piewidget.setLayout(self.pielayout)
         
         #Overall Summary Tab layouy
-        summarylayout.addWidget(dropdownwidget)
-        summarylayout.addWidget(self.submissiontablelabel)
-        summarylayout.addWidget(self.submissiontable)
-        summarylayout.addWidget(barwidget)
+        #summarylayout.addWidget(dropdownwidget)
+        summarylayout.addWidget(dropdownwidget, 0,0)
+        #summarylayout.addWidget(self.submissiontablelabel)
+        summarylayout.addWidget(self.submissiontablelabel, 1,0)
+        #summarylayout.addWidget(self.submissiontable)
+        summarylayout.addWidget(self.submissiontable, 2,0)
+        #summarylayout.addWidget(barwidget)
+        summarylayout.addWidget(barwidget, 3,0)
         #summarylayout.addWidget(piewidget2)
-        summarylayout.addWidget(piewidget)
-        summarylayout.addWidget(errorwarningwidget)
+        #summarylayout.addWidget(piewidget)
+        summarylayout.addWidget(piewidget, 4,0)
+        #summarylayout.addWidget(errorwarningwidget)
+        summarylayout.addWidget(errorwarningwidget, 5,0)
         summarywidget = QWidget()
         summarywidget.setLayout(summarylayout)
+        
+        #
+        # Load Sheet Tab
+        #
+        self.loadsheetheader = QLabel("Available Load Sheets for Submisison")
+        #self.loadsheetlayout.addWidget(self.loadsheetheader)
+        self.loadsheetlayout.addWidget(self.loadsheetheader, 0,0)
+        self.loadsheetbutton = QPushButton("List available load sheets")
+        self.loadsheetbutton.pressed.connect(self.getModelInfo)
+        #self.loadsheetlayout.addWidget(self.loadsheetbutton)
+        self.loadsheetlayout.addWidget(self.loadsheetbutton, 0, 1)
+        self.getsheetheader = QLabel("Select load sheets to create")
+        self.getsheetbutton = QPushButton("Download selected Load sheets")
+        self.getsheetbutton.pressed.connect(self.getSelectedNodes)
+        self.loadsheetlayout.addWidget(self.getsheetheader, 2,0)
+        self.loadsheetlayout.addWidget(self.getsheetbutton, 2,1)
+        self.loadsheetwidget = QWidget()
+        self.loadsheetwidget.setLayout(self.loadsheetlayout)
         
         tabs = QTabWidget()
         tabs.setTabPosition(QTabWidget.TabPosition.North)
@@ -240,6 +280,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.fullerrorwidget, "Errors")
         tabs.addTab(self.fullwarningwidget, "Warnings")
         tabs.addTab(self.fulldatawidget, "Data")
+        tabs.addTab(self.loadsheetwidget, "Load Sheets")
         
         
         
@@ -273,8 +314,13 @@ class MainWindow(QMainWindow):
         # Study level reset
         self.theDataThing.studyReset()
         self.submissioncombowidget.clear()
-        self.model = SubmissionTableModel(pd.DataFrame())
+        #self.model = SubmissionTableModel(pd.DataFrame())
+        self.model = NullTableModel()
         self.submissiontable.setModel(self.model)
+        self.fullTableReset()
+        self.fullPieReset()
+        #self.errorpiefig.clear()
+        #self.warningpiefig.clear()
         # Get new data
         vars = {"status": "All"}
         self.theDataThing.getSubmissionInfo(url=self.creds['url'], apitoken=self.creds['token'], variables=vars, abbrev=abbrev)
@@ -290,7 +336,54 @@ class MainWindow(QMainWindow):
 
 
     def submission_reset(self, name):
+        #print("submission_reset")
         self.theDataThing.submissionReset()
+        self.fullTableReset()
+        self.fullPieReset()
+        
+        # Pie clearning
+        #for i in reversed(range(self.pielayout.count())):
+        #    self.pielayout.itemAt(i).widget().deleteLater()
+        #for i in reversed(range(self.errorpielayout.count())):
+        #    self.errorpielayout.itemAt(i).widget().deleteLater()
+        #for i in reversed(range(self.warningpielayout.count())):
+        #    self.warningpielayout.itemAt(i).widget().deleteLater()
+        # Data table
+        #self.fulldatamodel = NullTableModel()
+        #self.fulldatatable.setModel(self.fulldatamodel)
+        #for i in reversed(range(self.datadropdown.count())):
+        #    self.datadropdown.removeItem(i)
+        # TODO:
+        # Clear the bar charts
+        # https://stackoverflow.com/questions/4528347/clear-all-widgets-in-a-layout-in-pyqt
+        #print("Reset called")
+        #print(f"Count value: {self.barlayout.count()}")
+        #if self.barlayout.count() > 0:
+        #    for i in range(self.barlayout.count()):
+                #print(f"Item at {str(i)} is {self.barlayout.itemAt(i)} and of type {type(self.barlayout.itemAt(i))}")
+                #print(f"Widget is {self.barlayout.itemAt(i).widget()} of type {type(self.barlayout.itemAt(i).widget())}")
+                #self.barlayout.itemAt(i).widget().destroy()
+        #        self.barlayout.itemAt(i).widget().setParent()
+        #    if self.barlayout.itemAt(i):
+        #        self.barlayout.itemAt(i).widget().setParent(None)
+        # Clear the pie charts
+        #while self.pielayout.count():
+        #    removeThis = self.pielayout.takeAt(0)
+        #    if removeThis.widget():
+        #        removeThis.widget().deleteLater()
+        #if self.pielayout.count() > 0:
+        #    for i in range(self.pielayout.count()):
+        #        removeThis = self.pielayout.itemAt(i).widget()
+        #        self.pielayout.removeWidget(removeThis)
+        #        removeThis.setParent(None)
+                #print(f"Item at {str(i)} is {self.barlayout.itemAt(i)} and of type {type(self.barlayout.itemAt(i))}")
+                #print(f"Widget is {self.barlayout.itemAt(i).widget()} of type {type(self.barlayout.itemAt(i).widget())}")
+                #self.pielayout.itemAt(i).widget().setParent(None)
+        # Clear the Error and Warning summary tables
+        # Clear the full Error, Warning, and Data tables
+        
+        #self.theDataThing.submissionReset()
+        
     
     
     #def submission_raw_changed_df(self, name):
@@ -331,34 +424,38 @@ class MainWindow(QMainWindow):
         
         graphdata_df = self.theDataThing.barChartCountData2(url=self.creds['url'], apitoken=self.creds['token'],submissionname=name)
         
+        #if graphdata_df is None:
+         #   print("Empty dataframe")
+          #  self.node_raw_widget.close()
+        #else:
+        if graphdata_df is not None:
+            # This builds the array used to change the lables
+            nodecount = 1
+            categorydata = {}
+            for node in graphdata_df['nodeName'].tolist():
+                categorydata[nodecount] = node
+                nodecount = nodecount + 1
+            
+            nodes = np.array(list(categorydata.keys()), dtype=float)
+            newstate = np.array(graphdata_df['new'].tolist())
+            errorstate = np.array(graphdata_df['error'].tolist())
+            warnstate = np.array(graphdata_df['warning'].tolist())
+            passstate = np.array(graphdata_df['passed'].tolist())
+            
+            width = .5
+            newbar = pg.BarGraphItem(x=nodes, height=newstate, width=width, brush=self.sub_blue, name="New")
+            errorbar = pg.BarGraphItem(x=nodes, height=errorstate, width= width, brush=self.sub_red, name="Error")
+            warnbar = pg.BarGraphItem(x=nodes, height=warnstate, width= width, brush=self.sub_yellow, name="Warning")
+            passbar = pg.BarGraphItem(x=nodes, height=passstate, width= width, brush=self.sub_green, name="Passed")
+            
+            self.node_raw_widget.addItem(newbar)
+            self.node_raw_widget.addItem(errorbar)
+            self.node_raw_widget.addItem(warnbar)
+            self.node_raw_widget.addItem(passbar)
+            
+            ax = self.node_raw_widget.getAxis("bottom")
+            ax.setTicks([list(categorydata.items())])
         
-        # This builds the array used to change the lables
-        nodecount = 1
-        categorydata = {}
-        for node in graphdata_df['nodeName'].tolist():
-            categorydata[nodecount] = node
-            nodecount = nodecount + 1
-        
-        nodes = np.array(list(categorydata.keys()), dtype=float)
-        newstate = np.array(graphdata_df['new'].tolist())
-        errorstate = np.array(graphdata_df['error'].tolist())
-        warnstate = np.array(graphdata_df['warning'].tolist())
-        passstate = np.array(graphdata_df['passed'].tolist())
-        
-        width = .5
-        newbar = pg.BarGraphItem(x=nodes, height=newstate, width=width, brush=self.sub_blue, name="New")
-        errorbar = pg.BarGraphItem(x=nodes, height=errorstate, width= width, brush=self.sub_red, name="Error")
-        warnbar = pg.BarGraphItem(x=nodes, height=warnstate, width= width, brush=self.sub_yellow, name="Warning")
-        passbar = pg.BarGraphItem(x=nodes, height=passstate, width= width, brush=self.sub_green, name="Passed")
-        
-        self.node_raw_widget.addItem(newbar)
-        self.node_raw_widget.addItem(errorbar)
-        self.node_raw_widget.addItem(warnbar)
-        self.node_raw_widget.addItem(passbar)
-        
-        ax = self.node_raw_widget.getAxis("bottom")
-        ax.setTicks([list(categorydata.items())])
-    
     
     def submission_percentage_changed(self, name):
         self.node_percentage_widget.clear()
@@ -368,31 +465,32 @@ class MainWindow(QMainWindow):
         
         graphdata_df = self.theDataThing.barChartCountData2(url=self.creds['url'], apitoken=self.creds['token'],submissionname=name, percentage=True)
                 
-        nodecount = 1
-        categorydata = {}
-        for node in graphdata_df['nodeName'].tolist():
-            categorydata[nodecount] = node
-            nodecount = nodecount + 1
-        
-        nodes = np.array(list(categorydata.keys()), dtype=float)
-        newstate = np.array(graphdata_df['new'].tolist())
-        errorstate = np.array(graphdata_df['error'].tolist())
-        warnstate = np.array(graphdata_df['warning'].tolist())
-        passstate = np.array(graphdata_df['passed'].tolist())
-        
-        width = .5
-        newbar = pg.BarGraphItem(x=nodes, height=newstate, width=width, brush=self.sub_blue, name="New")
-        errorbar = pg.BarGraphItem(x=nodes, height=errorstate, width= width, brush=self.sub_red, name="Error")
-        warnbar = pg.BarGraphItem(x=nodes, height=warnstate, width= width, brush=self.sub_yellow, name="Warning")
-        passbar = pg.BarGraphItem(x=nodes, height=passstate, width= width, brush=self.sub_green, name="Passed")
-        
-        self.node_percentage_widget.addItem(newbar)
-        self.node_percentage_widget.addItem(errorbar)
-        self.node_percentage_widget.addItem(warnbar)
-        self.node_percentage_widget.addItem(passbar)
-        
-        ax = self.node_percentage_widget.getAxis("bottom")
-        ax.setTicks([list(categorydata.items())])
+        if graphdata_df is not None:
+            nodecount = 1
+            categorydata = {}
+            for node in graphdata_df['nodeName'].tolist():
+                categorydata[nodecount] = node
+                nodecount = nodecount + 1
+            
+            nodes = np.array(list(categorydata.keys()), dtype=float)
+            newstate = np.array(graphdata_df['new'].tolist())
+            errorstate = np.array(graphdata_df['error'].tolist())
+            warnstate = np.array(graphdata_df['warning'].tolist())
+            passstate = np.array(graphdata_df['passed'].tolist())
+            
+            width = .5
+            newbar = pg.BarGraphItem(x=nodes, height=newstate, width=width, brush=self.sub_blue, name="New")
+            errorbar = pg.BarGraphItem(x=nodes, height=errorstate, width= width, brush=self.sub_red, name="Error")
+            warnbar = pg.BarGraphItem(x=nodes, height=warnstate, width= width, brush=self.sub_yellow, name="Warning")
+            passbar = pg.BarGraphItem(x=nodes, height=passstate, width= width, brush=self.sub_green, name="Passed")
+            
+            self.node_percentage_widget.addItem(newbar)
+            self.node_percentage_widget.addItem(errorbar)
+            self.node_percentage_widget.addItem(warnbar)
+            self.node_percentage_widget.addItem(passbar)
+            
+            ax = self.node_percentage_widget.getAxis("bottom")
+            ax.setTicks([list(categorydata.items())])
 
 
     def error_warning_tables(self, name):
@@ -414,7 +512,8 @@ class MainWindow(QMainWindow):
             errorpie = self.errorpiefig.add_subplot()
             errorpie.pie(errorcounts, labels=errorlabels, labeldistance=2, autopct='%1.1f%%')
             errorpieplate = FigureCanvasQTAgg(self.errorpiefig)
-            self.pielayout.addWidget(errorpieplate)
+            #self.pielayout.addWidget(errorpieplate, 1,0)
+            self.errorpielayout.addWidget(errorpieplate)
             
         if warning_df is not None:
             #populate the tables
@@ -426,7 +525,8 @@ class MainWindow(QMainWindow):
             warningpie = self.warningpiefig.add_subplot()
             warningpie.pie(warningcounts, labels=warninglables, labeldistance=2, autopct='%1.1f%%')
             warningpieplate = FigureCanvasQTAgg(self.warningpiefig)
-            self.pielayout.addWidget(warningpieplate)
+            #self.pielayout.addWidget(warningpieplate, 1,1)
+            self.warningpielayout.addWidget(warningpieplate)
     
     def full_error_tab(self, name):
         self.theDataThing.fullValidationErrorData(url=self.creds['url'], apitoken=self.creds['token'],submissionname=name)
@@ -457,33 +557,77 @@ class MainWindow(QMainWindow):
             self.fulldatatable.setModel(self.fulldatamodel)
             
     
-    def resetApp(self, name):
-        #Reset the whole enchilada
-        self.theDataThing.fullReset()
+    def fullTableReset(self):
+        #Reset Data Table
+        self.fulldatamodel = NullTableModel()
+        self.fulldatatable.setModel(self.fulldatamodel)
+        for i in reversed(range(self.datadropdown.count())):
+            self.datadropdown.removeItem(i)
+            
+        #Reset Warning table
+        self.warningmodel = NullTableModel()
+        self.fullwarningtable.setModel(self.warningmodel)
+        for i in reversed(range(self.warningdropdown.count())):
+                self.warningdropdown.removeItem(i)
         
-        #Clear out out the tables
-        self.resetmodel = SubmissionTableModel(pd.DataFrame())
-        self.submissiontable.setModel(self.resetmodel)
-        self.fulldatatable.setModel(self.resetmodel)
-        self.fullwarningtable.setModel(self.resetmodel)
-        self.fullerrortable.setModel(self.resetmodel)
-        self.errorsummarytable.setModel(self.resetmodel)
-        self.warningsummarytable.setModel(self.resetmodel)
-        
-        #Clear out the study and submission dropdowns
-        self.tiercombowidget.setCurrentIndex(-1)
-        self.studycombowidget.addItems([])
-        self.studycombowidget.setCurrentIndex(-1)
-        self.submissioncombowidget.addItems([])
-        self.submissioncombowidget.setCurrentIndex(-1)
-        
-        #clear out the graphs        
-        self.node_raw_widget.clear()
-        self.node_percentage_widget.clear()
-        
-        
+        #Reset Error table
+        self.fullerrormodel = NullTableModel()
+        self.fullerrortable.setModel(self.fullerrormodel)
+        for i in reversed(range(self.errordropdown.count())):
+            self.errordropdown.removeItem(i)
+            
+            
+    def fullPieReset(self):
+        for i in reversed(range(self.errorpielayout.count())):
+            self.errorpielayout.itemAt(i).widget().deleteLater()
+        for i in reversed(range(self.warningpielayout.count())):
+            self.warningpielayout.itemAt(i).widget().deleteLater()
 
-
+    def getModelInfo(self):
+        modelinfo = self.theDataThing.getModelNameVersion(self.submissioncombowidget.currentText())
+        nodelist = self.theDataThing.dataNodeDropDown(url=self.creds['url'], apitoken=self.creds['token'], submissionname=self.submissioncombowidget.currentText())
+        self.loadsheetheader.setText(f"Sheets available for {self.submissioncombowidget.currentText()} Model: {modelinfo['handle']} Version: {modelinfo['version']}")
+        for node in nodelist:
+            checkboxthing = QCheckBox(node)
+            self.checkboxlayout.addWidget(checkboxthing)
+            self.checkboxgroup.addButton(checkboxthing)
+        checkboxes = QWidget()
+        checkboxes.setLayout(self.checkboxlayout)
+        self.loadsheetlayout.addWidget(checkboxes, 1,0)
+        
+    
+    def getSelectedNodes(self):
+        modelinfo = self.theDataThing.getModelNameVersion(self.submissioncombowidget.currentText())
+        checked = []
+        for checkbox in self.checkboxgroup.buttons():
+            if checkbox.isChecked():
+                checked.append(checkbox.text())
+       
+        saveFileDialog = QFileDialog(self)
+        saveFileDialog.setWindowTitle("Select a directory for the manifests")
+        saveFileDialog.setFileMode(QFileDialog.FileMode.Directory)
+        saveFileDialog.setViewMode(QFileDialog.ViewMode.List)
+        
+        if saveFileDialog.exec():
+            savedir = saveFileDialog.selectedFiles()[0]
+            print(f"Saving sheets for nodes {checked} in directory {savedir}")
+            
+        #For each node
+        mdf = modelFilesByTag(modelName=modelinfo['handle'], modelVersion=modelinfo['version'], mdfonly=True)
+        for node in checked:
+            data_df = self.theDataThing.fullDataNodeTableData(url=self.creds['url'], apitoken=self.creds['token'],submissionname=self.submissioncombowidget.currentText(), nodename=node)
+            #print(f"{data_df}\n")
+            data_df = loadSheetOMizer(df=data_df, nodename=node, mdf=mdf)
+            
+            filename = f"{savedir}\\{mdf.handle}_{mdf.version}_{node}_loadsheet.tsv"
+            data_df.to_csv(filename, sep="\t", index=False)
+            
+        #  Get the node data
+        # Get the node props
+        # Get the model relationships
+        # Add relationship columns
+        # Add type column
+        
 
 app = QApplication([])
 window = MainWindow()

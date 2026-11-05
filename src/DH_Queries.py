@@ -18,6 +18,8 @@ query ListSubmissions($status: [String]){
   listSubmissions(status: $status){
     submissions{
       _id
+      dataCommons
+      modelVersion
       accessedAt
       name
       submitterID

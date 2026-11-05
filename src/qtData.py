@@ -56,70 +56,92 @@ class SubmissionData(QObject):
         return self.submission_df['name'].unique().tolist()
     
     
-    def getErrorPieChartInfo(self, url, apitoken, submissionname, variables=None):
-        sub_df = self.submission_df.query('studyAbbreviaion == @submission')
-        subid = sub_df.at[0, "_id"]
+    def getModelNameVersion(self, submissionname):
+        if len(submissionname) > 0:
+            #print(self.submission_df)
+            handlelist = self.submission_df.query('name == @submissionname')['dataCommons'].tolist()
+            versionlist = self.submission_df.query('name == @submissionname')['modelVersion'].tolist()
+            #print(f"Handelist: {handlelist}\tVersionlist: {versionlist}")
+            return {'handle': handlelist[0], 'version': versionlist[0]}
+            
         
-        vars = {"submissionID":subid, "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
-        errorjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.list_sub_query, variables=vars)
-        print(errorjson)
+    
+    def getErrorPieChartInfo(self, url, apitoken, submissionname, variables=None):
+        #Not sure if this is used anywhere
+        if len(submissionname) > 0:
+            sub_df = self.submission_df.query('name == @submissionname')
+            subid = sub_df.at[0, "_id"]
+            
+            vars = {"submissionID":subid, "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+            errorjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.list_sub_query, variables=vars)
+            print(errorjson)
         
         
     def barChartCountData2(self,url, apitoken, submissionname, variables=None, percentage=False):
         categories = ['new', 'error', 'warning', 'passed']
         columns = ['nodeName', 'total', 'new', 'error', 'warning', 'passed']
         
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist) >= 1 :
-            variables = {'id': idlist[0]}
-            countjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query= dhq.submission_stats_query, variables=variables)
-            substats_df = pd.DataFrame(columns=columns)
-            for entry in countjson['data']['submissionStats']['stats']:
-                substats_df.loc[len(substats_df)] = entry
-                
-            if percentage:
-                newlist = []
-                for index, row in substats_df.iterrows():
-                    newrow = {}
-                    newrow['nodeName'] = row['nodeName']
-                    for category in categories:
-                        if row[category] > 0:
-                            newrow[category] = int((row[category]/row['total'])*100)
-                        else:
-                            newrow[category] = 0
-                    newlist.append(newrow)
-                percentage_df = pd.DataFrame(newlist)
-                return percentage_df
+        #print(f"Submissionname is {submissionname} and type {type(submissionname)} and length {len(submissionname)}")
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist) >= 1 :
+                variables = {'id': idlist[0]}
+                countjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query= dhq.submission_stats_query, variables=variables)
+                substats_df = pd.DataFrame(columns=columns)
+                for entry in countjson['data']['submissionStats']['stats']:
+                    substats_df.loc[len(substats_df)] = entry
+                    
+                if percentage:
+                    newlist = []
+                    for index, row in substats_df.iterrows():
+                        newrow = {}
+                        newrow['nodeName'] = row['nodeName']
+                        for category in categories:
+                            if row[category] > 0:
+                                newrow[category] = int((row[category]/row['total'])*100)
+                            else:
+                                newrow[category] = 0
+                        newlist.append(newrow)
+                    percentage_df = pd.DataFrame(newlist)
+                    return percentage_df
+                else:
+                    return substats_df
             else:
-                return substats_df
+                return None
         else:
             return None
         
     
     def validationErrorData(self, url, apitoken, submissionname, variables=None):
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist)>=1:
-            variables = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
-            val_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.summaryQuery, variables=variables)
-            errorsummarylist = []
-            if val_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
-                return  None
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist)>=1:
+                variables = {"submissionID":idlist[0], "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+                val_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.summaryQuery, variables=variables)
+                errorsummarylist = []
+                if val_res['data']['aggregatedSubmissionQCResults']['total'] == 0:
+                    return  None
+                else:
+                    val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
+                    self.errorlist = val_df['title'].unique().tolist()
+                    #errorsummary = {}
+                    errorlist = val_df['title'].unique().tolist()
+                    for error in errorlist:
+                        error_df = val_df.query('title == @error')
+                        #errorsummary[error] = error_df['count'].sum()
+                        errorsummarylist.append({'Error': error, 'Count': error_df['count'].sum()})
+                    errorcount_df = pd.DataFrame(errorsummarylist)
+                    return errorcount_df
             else:
-                val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
-                self.errorlist = val_df['title'].unique().tolist()
-                #errorsummary = {}
-                errorlist = val_df['title'].unique().tolist()
-                for error in errorlist:
-                    error_df = val_df.query('title == @error')
-                    #errorsummary[error] = error_df['count'].sum()
-                    errorsummarylist.append({'Error': error, 'Count': error_df['count'].sum()})
-                errorcount_df = pd.DataFrame(errorsummarylist)
-                return errorcount_df
+                return None
         else:
             return None
-        
+
+
+
     
     def validationWarningData(self, url, apitoken, submissionname, variables=None):
+        if len(submissionname) > 0:
             idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
             if len(idlist)>=1:
                 variables = {"submissionID":idlist[0], "severity":"Warning", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
@@ -141,41 +163,64 @@ class SubmissionData(QObject):
                     return warningsummary_df
             else:
                 return None
+        else:
+            return None
+
+
+
     
     def fullValidationErrorData(self, url, apitoken, submissionname, variables=None):
-        
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist)>=1:
-            variables = {"id": idlist[0], "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
-            error_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
-            self.errordetail_df = pd.json_normalize(error_detail_res['data']['submissionQCResults']['results'])
-            #print(f"Error Detail Dataframe:\n{self.errordetail_df.columns}\n{self.errordetail_df}")
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist)>=1:
+                variables = {"id": idlist[0], "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+                error_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
+                self.errordetail_df = pd.json_normalize(error_detail_res['data']['submissionQCResults']['results'])
+                #print(f"Error Detail Dataframe:\n{self.errordetail_df.columns}\n{self.errordetail_df}")
+        else:
+            self.errordetail_df = pd.DataFrame()
             
             
     def fullValidationErrorTableData(self, errorname):
-        tableinfo = []
-        for index, row in self.errordetail_df.iterrows():
-            for error in row['errors']:
-                tableinfo.append({'ErrorTitle': error['title'], 'Description': error['description']})
-        table_df = pd.DataFrame(tableinfo)
-        return table_df.query('ErrorTitle ==@errorname')
+        print(f"Errorname: {errorname}\tType: {type(errorname)}\tLength: {len(errorname)}")
+        if len(errorname) > 0:
+            tableinfo = []
+            for index, row in self.errordetail_df.iterrows():
+                for error in row['errors']:
+                    tableinfo.append({'ErrorTitle': error['title'], 'Description': error['description']})
+            table_df = pd.DataFrame(tableinfo)
+            return table_df.query('ErrorTitle ==@errorname')
+        else:
+            return pd.DataFrame()
   
   
     
     def fullValidationWarningData(self, url, apitoken, submissionname, variables=None):
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist)>=1:
-            variables = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
-            warning_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
-            self.warningdetail_df = pd.json_normalize(warning_detail_res['data']['submissionQCResults']['results'])
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist)>=1:
+                variables = {"id": idlist[0], "severities":"Warning", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
+                warning_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
+                self.warningdetail_df = pd.json_normalize(warning_detail_res['data']['submissionQCResults']['results'])
+        else:
+            self.warningdetail_df = pd.DataFrame()
+
+
+
             
     def fullValidationWarningTableData(self, warningname):
-        tableinfo = []
-        for index, row in self.warningdetail_df.iterrows():
-            for warning in row['warnings']:
-                tableinfo.append({'WarningTitle': warning['title'], 'Description': warning['description']})
-        table_df = pd.DataFrame(tableinfo)
-        return table_df.query('WarningTitle == @warningname')
+        if len(warningname) > 0:
+            tableinfo = []
+            for index, row in self.warningdetail_df.iterrows():
+                for warning in row['warnings']:
+                    tableinfo.append({'WarningTitle': warning['title'], 'Description': warning['description']})
+            table_df = pd.DataFrame(tableinfo)
+            return table_df.query('WarningTitle == @warningname')
+        else:
+            return pd.DataFrame()
+
+
+
     
     def errorDropDownValues(self):
         return self.errorlist
@@ -184,25 +229,35 @@ class SubmissionData(QObject):
         return self.warninglist
     
     def dataNodeDropDown(self, url, apitoken, submissionname, variables=None):
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist)>=1:
-            #variables = {'_id':idlist[0], 'nodeType':submissionname, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
-            variables = {'id':idlist[0]}
-            data_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.submission_stats_query, variables=variables)
-            for entry in data_res['data']['submissionStats']['stats']:
-                self.datalist.append(entry['nodeName'])
-        return self.datalist
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist)>=1:
+                #variables = {'_id':idlist[0], 'nodeType':submissionname, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
+                variables = {'id':idlist[0]}
+                data_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.submission_stats_query, variables=variables)
+                for entry in data_res['data']['submissionStats']['stats']:
+                    self.datalist.append(entry['nodeName'])
+            return self.datalist
+        else:
+            self.datalist = []
+            return self.datalist
+
+
+
     
     def fullDataNodeTableData(self, url, apitoken, submissionname, nodename, variables=None):
-        idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
-        if len(idlist) >= 1:
-            variables = {'_id':idlist[0], 'nodeType':nodename, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
-            data_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.submission_nodes_query, variables=variables)
-            data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
-            for entry in data_res['data']['getSubmissionNodes']['nodes']:
-                data_df.loc[len(data_df)] = json.loads(entry['props'])
-            return data_df
-        
+        if len(submissionname) > 0:
+            idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
+            if len(idlist) >= 1:
+                variables = {'_id':idlist[0], 'nodeType':nodename, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
+                data_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.submission_nodes_query, variables=variables)
+                data_df = pd.DataFrame(columns=data_res['data']['getSubmissionNodes']['properties'])
+                for entry in data_res['data']['getSubmissionNodes']['nodes']:
+                    data_df.loc[len(data_df)] = json.loads(entry['props'])
+                return data_df
+        else:
+            return pd.DataFrame()
+            
     def fullReset(self):
         self.study_df = pd.DataFrame()
         self.submission_df = pd.DataFrame()
