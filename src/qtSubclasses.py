@@ -1,10 +1,8 @@
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout, QButtonGroup, QCheckBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 from PyQt6.QtCore import QAbstractTableModel, Qt
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-import pandas as pd
 
 
 class CustomDialog(QDialog):
@@ -80,19 +78,3 @@ class PieCanvas(FigureCanvasQTAgg):
         fig, ax = plt.subplot()
         ax.pie(pieslices, labels=pielabels, labeldistance=1.15)
         super().__init__(fig)
-        
-        
-class LoadSheets(QButtonGroup):
-    def __init__(self):
-        super().__init__()
-        
-    def addCheckBoxes(self, boxlist):
-        sheetgroup = QButtonGroup()
-        for box in boxlist:
-            sheetgroup.addButton(QCheckBox(box))
-        return sheetgroup
-    
-    def removeCheckBoxes(self, boxlist, sheetgroup:QButtonGroup):
-        for box in boxlist:
-            sheetgroup.removeButton(QCheckBox(box))
-        return sheetgroup

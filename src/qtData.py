@@ -26,8 +26,6 @@ class SubmissionData(QObject):
         
     
     def getStudyInfo(self, url, apitoken, variables=None):
-        #print('Starting Submission Info process')
-        
         studyinfojson = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.org_query2, variables=variables)
         if studyinfojson is not None:
             loading = []
@@ -58,30 +56,26 @@ class SubmissionData(QObject):
     
     def getModelNameVersion(self, submissionname):
         if len(submissionname) > 0:
-            #print(self.submission_df)
             handlelist = self.submission_df.query('name == @submissionname')['dataCommons'].tolist()
             versionlist = self.submission_df.query('name == @submissionname')['modelVersion'].tolist()
-            #print(f"Handelist: {handlelist}\tVersionlist: {versionlist}")
             return {'handle': handlelist[0], 'version': versionlist[0]}
             
         
     
-    def getErrorPieChartInfo(self, url, apitoken, submissionname, variables=None):
-        #Not sure if this is used anywhere
-        if len(submissionname) > 0:
-            sub_df = self.submission_df.query('name == @submissionname')
-            subid = sub_df.at[0, "_id"]
-            
-            vars = {"submissionID":subid, "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
-            errorjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.list_sub_query, variables=vars)
-            print(errorjson)
+    #def getErrorPieChartInfo(self, url, apitoken, submissionname, variables=None):
+    #    #Not sure if this is used anywhere
+    #    if len(submissionname) > 0:
+    #        sub_df = self.submission_df.query('name == @submissionname')
+    #        subid = sub_df.at[0, "_id"]
+    #        
+    #        vars = {"submissionID":subid, "severity":"Error", "first":-1, "offset":0, "sortDirection": "desc", "orderBy": "displayID"}
+    #        errorjson = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.list_sub_query, variables=vars)
         
         
     def barChartCountData2(self,url, apitoken, submissionname, variables=None, percentage=False):
         categories = ['new', 'error', 'warning', 'passed']
         columns = ['nodeName', 'total', 'new', 'error', 'warning', 'passed']
         
-        #print(f"Submissionname is {submissionname} and type {type(submissionname)} and length {len(submissionname)}")
         if len(submissionname) > 0:
             idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
             if len(idlist) >= 1 :
@@ -124,11 +118,9 @@ class SubmissionData(QObject):
                 else:
                     val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
                     self.errorlist = val_df['title'].unique().tolist()
-                    #errorsummary = {}
                     errorlist = val_df['title'].unique().tolist()
                     for error in errorlist:
                         error_df = val_df.query('title == @error')
-                        #errorsummary[error] = error_df['count'].sum()
                         errorsummarylist.append({'Error': error, 'Count': error_df['count'].sum()})
                     errorcount_df = pd.DataFrame(errorsummarylist)
                     return errorcount_df
@@ -153,11 +145,9 @@ class SubmissionData(QObject):
                 else:
                     val_df = pd.DataFrame(val_res['data']['aggregatedSubmissionQCResults']['results'])
                     self.warninglist = val_df['title'].unique().tolist()
-                    #warningsummary = {}
                     warninglist = val_df['title'].unique().tolist()
                     for warning in warninglist:
                         warning_df = val_df.query('title == @warning')
-                        #warningsummary[warning] = error_df['count'].sum()
                         warningsummarylist.append({'Warning': warning, 'Count': warning_df['count'].sum()})
                     warningsummary_df = pd.DataFrame(warningsummarylist)
                     return warningsummary_df
@@ -173,16 +163,23 @@ class SubmissionData(QObject):
         if len(submissionname) > 0:
             idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
             if len(idlist)>=1:
-                variables = {"id": idlist[0], "severities":"Error", "first": -1, "offset": 0, "orderBy":"displayID", "sortDirection":"desc"}
-                error_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
-                self.errordetail_df = pd.json_normalize(error_detail_res['data']['submissionQCResults']['results'])
-                #print(f"Error Detail Dataframe:\n{self.errordetail_df.columns}\n{self.errordetail_df}")
+                # TODO  Need to warn about very large error sets
+                firstcount = 1000
+                offsetcount = 0
+                jsonlength = 1000
+                #self.errordetail_df = pd.DataFrame()
+                while jsonlength == firstcount:
+                    variables = {"id": idlist[0], "severities":"Error", "first": firstcount, "offset": offsetcount, "orderBy":"displayID", "sortDirection":"desc"}
+                    error_detail_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.detailedQCQuery, variables=variables)
+                    jsonlength = len(error_detail_res['data']['submissionQCResults']['results'])
+                    temp_df = pd.json_normalize(error_detail_res['data']['submissionQCResults']['results'])
+                    self.errordetail_df = pd.concat([self.errordetail_df, temp_df], ignore_index=True)
+                    #self.errordetail_df = pd.json_normalize(error_detail_res['data']['submissionQCResults']['results'])
         else:
             self.errordetail_df = pd.DataFrame()
             
             
     def fullValidationErrorTableData(self, errorname):
-        print(f"Errorname: {errorname}\tType: {type(errorname)}\tLength: {len(errorname)}")
         if len(errorname) > 0:
             tableinfo = []
             for index, row in self.errordetail_df.iterrows():
@@ -232,7 +229,6 @@ class SubmissionData(QObject):
         if len(submissionname) > 0:
             idlist = self.submission_df.query("name == @submissionname")["_id"].tolist()
             if len(idlist)>=1:
-                #variables = {'_id':idlist[0], 'nodeType':submissionname, 'status':'All', 'first':-1, 'offset':0, 'orderBy':'studyID', 'sortDirection':'desc'}
                 variables = {'id':idlist[0]}
                 data_res = dhf.dhApiQuery(url=url, apitoken=apitoken, query=dhq.submission_stats_query, variables=variables)
                 for entry in data_res['data']['submissionStats']['stats']:
@@ -269,7 +265,6 @@ class SubmissionData(QObject):
         self.datalist = []
         
     def studyReset(self):
-        #self.study_df = pd.DataFrame()
         self.submission_df = pd.DataFrame()
         self.errordetail_df = pd.DataFrame()
         self.errorlist = []
@@ -279,8 +274,6 @@ class SubmissionData(QObject):
         self.datalist = []
     
     def submissionReset(self):
-        #self.study_df = pd.DataFrame()
-        #self.submission_df = pd.DataFrame()
         self.errordetail_df = pd.DataFrame()
         self.errorlist = []
         self.warningdetail_df = pd.DataFrame()

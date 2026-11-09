@@ -20,9 +20,7 @@ def dhAPICreds(tier):
     :rtype: dictionary
     """
     
-    #url = None
-    #token = None
-    
+  
     urls = {
         'prod': 'https://hub.datacommons.cancer.gov/api/graphql',
         'stage': 'https://hub-stage.datacommons.cancer.gov/api/graphql',
@@ -112,8 +110,6 @@ def modelFilesByTag(modelName, modelVersion, mdfonly = False):
         'icdc': [f"https://raw.githubusercontent.com/CBIIT/{modelName}-model-tool/refs/tags/{modelVersion}/model-desc/{modelName}-model.yml", f"https://raw.githubusercontent.com/CBIIT/{modelName}-model-tool/refs/tags/{modelVersion}/model-desc/{modelName}-model-props.yml"]
     }
     
-    for entry in urls[modelName]:
-        print(entry)
     mdf = bento_mdf.MDF(*urls[modelName])
     mdf = mdf.model
     if mdfonly:
@@ -135,6 +131,3 @@ def loadSheetOMizer(df, nodename, mdf):
     df.insert(loc=0, column='type', value=nodename.lower())
     
     return df
-    #print(f"Model props\n{proplist}\nDF Props:\n{dfproplist}")
-    
-    #print(f"Handle: {mdf.handle}\tVersion: {mdf.version}")
